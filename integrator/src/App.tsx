@@ -51,6 +51,7 @@ class LinkService extends Effect.Service<LinkService>()("@crosshatch/LinkService
     ),
   ],
   scoped: Effect.gen(function*() {
+    console.log("HERE?")
     return {
       client: yield* RpcClient.make(AgentRpc),
     }
