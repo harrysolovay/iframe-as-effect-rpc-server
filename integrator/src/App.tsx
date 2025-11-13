@@ -1,25 +1,26 @@
 import { Atom, useAtomMount } from "@effect-atom/atom-react"
-import { Effect, Layer, Stream, Schema as S } from "effect"
+import { Effect, Layer,  Schema as S } from "effect"
 import { BrowserWorker } from "@effect/platform-browser"
 import { RpcClient, Rpc, RpcGroup } from "@effect/rpc"
 
-export const contextReady = Effect.fn(function*(target: Window) {
-  if (target.document.readyState !== "complete") {
-    yield* Stream.fromEventListener(target, "load", {
-      once: true,
-    }).pipe(
-      Stream.runDrain,
-    )
-  }
-})
-
-export const IframeWorker = Effect.fnUntraced(function*(iframe: HTMLIFrameElement) {
+export const IframeWorker = Effect.gen(function*() {
   const channel = new MessageChannel()
-  const contentWindow = yield* Effect.fromNullable(iframe.contentWindow)
-  yield* contextReady(contentWindow)
-  contentWindow.postMessage("connect", "*", [channel.port2])
+  const latch = yield* Effect.makeLatch(false)
+  const iframe = document.createElement("iframe")
+  iframe.onload = () => latch.unsafeOpen()
+  Object.assign(iframe, {
+    sandbox: "allow-scripts allow-same-origin",
+    src: `http://localhost:7777`,
+  })
+  document.body.appendChild(iframe)
+  yield* latch.await
+  const { contentWindow } = iframe
+  console.log({ contentWindow })
+  contentWindow!.postMessage("connect", "*", [channel.port2])
   return BrowserWorker.layerPlatform(() => channel.port1)
-}, Layer.unwrapEffect)
+}).pipe(
+  Layer.unwrapEffect
+)
 
 class AgentRpc extends RpcGroup.make(
   Rpc.make("Beep", {
@@ -30,24 +31,10 @@ class AgentRpc extends RpcGroup.make(
   }),
 ) {}
 
-let linked: HTMLIFrameElement | undefined
-export const link = () => {
-  if (!linked) {
-    linked = document.createElement("iframe")
-    linked.setAttribute("data-crosshatch", "link")
-    Object.assign(linked, {
-      sandbox: "allow-scripts allow-same-origin",
-      src: `http://localhost:7777`,
-    })
-    document.body.appendChild(linked)
-  }
-  return linked
-}
-
 class LinkService extends Effect.Service<LinkService>()("@crosshatch/LinkService", {
   dependencies: [
     RpcClient.layerProtocolWorker({ size: 1 }).pipe(
-      Layer.provide(Layer.suspend(() => IframeWorker(link()))),
+      Layer.provide(IframeWorker),
     ),
   ],
   scoped: Effect.gen(function*() {

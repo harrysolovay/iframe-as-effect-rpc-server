@@ -11,7 +11,7 @@ export class AgentRpc extends RpcGroup.make(
   }),
 ) {}
 
-const AgentRpcLive = AgentRpc.toLayer(Effect.gen(function*() {
+const AgentRpcLive = Effect.gen(function*() {
   yield* Effect.log("Setting up agent live")
 
   return {
@@ -20,7 +20,9 @@ const AgentRpcLive = AgentRpc.toLayer(Effect.gen(function*() {
       return test
     }),
   }
-}))
+}).pipe(
+  AgentRpc.toLayer
+)
 
 const IframeWorkerRunner = Effect.gen(function*() {
   const deferred = yield* Deferred.make<MessagePort>()
