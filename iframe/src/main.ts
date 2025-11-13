@@ -1,6 +1,6 @@
 import { RpcServer, Rpc, RpcGroup } from "@effect/rpc"
-import { Deferred, Effect, Schema as S, Layer } from "effect"
-import { BrowserWorkerRunner, BrowserRuntime } from "@effect/platform-browser"
+import { Deferred, Effect, Schema as S, Layer, Console } from "effect"
+import { BrowserWorkerRunner } from "@effect/platform-browser"
 
 export class AgentRpc extends RpcGroup.make(
   Rpc.make("Beep", {
@@ -11,7 +11,7 @@ export class AgentRpc extends RpcGroup.make(
   }),
 ) {}
 
-const AgentRpcLive = Effect.gen(function*() {
+const AgentRpcLive = AgentRpc.toLayer(Effect.gen(function*() {
   yield* Effect.log("Setting up agent live")
 
   return {
@@ -20,9 +20,7 @@ const AgentRpcLive = Effect.gen(function*() {
       return test
     }),
   }
-}).pipe(
-  AgentRpc.toLayer
-)
+}))
 
 const IframeWorkerRunner = Effect.gen(function*() {
   const deferred = yield* Deferred.make<MessagePort>()
@@ -37,12 +35,14 @@ const IframeWorkerRunner = Effect.gen(function*() {
   return BrowserWorkerRunner.layerMessagePort(port)
 }).pipe(Layer.unwrapEffect)
 
-
-
-RpcServer.layer(AgentRpc).pipe(
-  Layer.provide(AgentRpcLive),
-  Layer.provide(RpcServer.layerProtocolWorkerRunner),
-  Layer.provide(IframeWorkerRunner),
-  BrowserWorkerRunner.launch,
-  BrowserRuntime.runMain
+Console.log("BEFORE").pipe(
+  Effect.andThen(RpcServer.layer(AgentRpc).pipe(
+    Layer.provide(AgentRpcLive),
+    Layer.provide(RpcServer.layerProtocolWorkerRunner),
+    Layer.provide(IframeWorkerRunner),
+    BrowserWorkerRunner.launch,
+    Effect.andThen(Console.log("AFTER")),
+  )),
+  Effect.runFork,
 )
+

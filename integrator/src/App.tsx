@@ -7,15 +7,13 @@ export const IframeWorker = Effect.gen(function*() {
   const channel = new MessageChannel()
   const latch = yield* Effect.makeLatch(false)
   const iframe = document.createElement("iframe")
+  iframe.setAttribute("sandbox", "allow-scripts allow-same-origin")
+  iframe.setAttribute("src", "http://localhost:7777")
   iframe.onload = () => latch.unsafeOpen()
-  Object.assign(iframe, {
-    sandbox: "allow-scripts allow-same-origin",
-    src: `http://localhost:7777`,
-  })
   document.body.appendChild(iframe)
   yield* latch.await
+  console.log(iframe)
   const { contentWindow } = iframe
-  console.log({ contentWindow })
   contentWindow!.postMessage("connect", "*", [channel.port2])
   return BrowserWorker.layerPlatform(() => channel.port1)
 }).pipe(
@@ -45,16 +43,16 @@ class LinkService extends Effect.Service<LinkService>()("@crosshatch/LinkService
   }),
 }) {}
 
-const runtimeAtom = Atom.runtime(LinkService.Default)
-
-const linkAtom = runtimeAtom.atom(Effect.gen(function*() {
+const linkAtom = Atom.make(Effect.gen(function*() {
   console.log("DOES THIS RUN?")
   const { client } = yield* LinkService
   const result = yield* client.Beep({
     test: "HELLO",
   })
   console.log({result})
-}))
+}).pipe(
+  Effect.provide(LinkService.Default)    
+))
 
 
 export const App = () => {
